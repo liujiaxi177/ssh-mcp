@@ -25,7 +25,7 @@ ssh-mcp --allowed-hosts="web1,db1,staging"
 - **SSH config integration** — Resolves hosts from `~/.ssh/config` (HostName, Port, User, IdentityFile)
 - **Agent forwarding** — Authenticates via `ssh-agent` or `gpg-agent` (SSH_AUTH_SOCK)
 - **Virtual terminal** — Full PTY emulation with ANSI rendering via [charmbracelet/x/vt](https://github.com/charmbracelet/x)
-- **File transfer** — Bidirectional file and directory transfers via SFTP (recursive)
+- **File transfer** — Bidirectional file and directory transfers via SFTP (recursive, scp/cp-style destinations, `~/` expansion)
 - **Allowlist-only access** — Only explicitly permitted hosts can be connected to
 - **Session management** — Multiple concurrent sessions with independent state
 - **Zero config** — Works out of the box if your `~/.ssh/config` is set up
@@ -82,8 +82,8 @@ ssh-mcp --allowed-hosts="my-desktop"
 | `ssh_read_file`     | Read a remote file over SFTP (clean bytes, no shell)              |
 | `ssh_write_file`    | Write a remote file over SFTP (no quoting pitfalls)               |
 | `ssh_edit_file`     | Exact find-and-replace edit of a remote file (read it first)      |
-| `ssh_upload`        | Upload a local file or directory via SFTP                         |
-| `ssh_download`      | Download a remote file or directory via SFTP                      |
+| `ssh_upload`        | Upload a local file or directory via SFTP (recursive; `~/` aware) |
+| `ssh_download`      | Download a remote file or directory via SFTP (recursive; `~/` aware) |
 | `ssh_list_sessions` | List all sessions with active state and size                      |
 | `ssh_list_hosts`    | List allowed hosts with resolved connection details               |
 | `ssh_close_session` | Close a session                                                   |
@@ -144,6 +144,24 @@ Sessions default to a **200x50** virtual terminal, large enough for typical
 that pollute scrollback. Clients can override the initial size via `width` /
 `height` on `ssh_connect`, or resize a live session with `ssh_resize`. Values
 are clamped to `[20, 500]` columns x `[5, 200]` rows.
+
+### File transfers
+
+`ssh_upload` and `ssh_download` follow `scp`/`cp` destination semantics:
+
+- **Container destinations** — if the destination already exists as a directory,
+  or was written with a trailing path separator (`/` remotely; `/` or `\`
+  locally), a single file is copied **into** it under its own name. Otherwise
+  the destination is the target file name.
+- **Tilde expansion** — a leading `~/` is expanded to the remote login user's
+  home for remote paths (SFTP passes paths through verbatim, so the server
+  resolves it), and to the local user's home for local paths. Windows clients may
+  also write `~\`.
+- **Directories** — copied recursively. Symlinks are followed (like `scp -r`),
+  and symlink cycles are detected and skipped instead of recursing forever.
+- **Overwrites and parents** — missing parent directories are created on both
+  ends, and existing files are overwritten. Source permissions are re-applied
+  when the source reports a non-zero mode.
 
 ### Session lifecycle
 
