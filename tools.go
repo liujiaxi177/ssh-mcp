@@ -83,14 +83,14 @@ type editFileArgs struct {
 
 type uploadArgs struct {
 	SessionID  string `json:"session_id" jsonschema:"SSH session ID"`
-	LocalPath  string `json:"local_path" jsonschema:"Local file or directory path to upload"`
-	RemotePath string `json:"remote_path" jsonschema:"Destination path on the remote host"`
+	LocalPath  string `json:"local_path" jsonschema:"Local file or directory path to upload. A leading ~/ is expanded to the local home directory."`
+	RemotePath string `json:"remote_path" jsonschema:"Destination path on the remote host. An existing directory or a trailing slash means a single local file is copied into that directory under its own name; otherwise this is the target file name. A leading ~/ is expanded to the remote user's home directory."`
 }
 
 type downloadArgs struct {
 	SessionID  string `json:"session_id" jsonschema:"SSH session ID"`
-	RemotePath string `json:"remote_path" jsonschema:"Remote file or directory path to download"`
-	LocalPath  string `json:"local_path" jsonschema:"Destination path on the local host"`
+	RemotePath string `json:"remote_path" jsonschema:"Remote file or directory path to download. A leading ~/ is expanded to the remote user's home directory."`
+	LocalPath  string `json:"local_path" jsonschema:"Destination path on the local host. An existing directory or a trailing separator means a single remote file is copied into that directory under its own name; otherwise this is the target file name. A leading ~/ is expanded to the local home directory."`
 }
 
 // textResult builds a successful CallToolResult containing only the given
@@ -340,8 +340,12 @@ func registerTools(server *mcp.Server, mgr *SSHManager) {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolUpload,
-		Description: "Upload a local file or directory to a remote host via SFTP (recursive for directories)",
+		Name: toolUpload,
+		Description: "Upload a local file or directory to a remote host via SFTP (recursive for directories). " +
+			"If local_path is a single file and remote_path is an existing directory or ends with '/', the " +
+			"file is copied into that directory under its own name; otherwise remote_path is the target " +
+			"file name. A leading '~/' in either path is expanded (remotely to the login user's home). " +
+			"Parent directories are created as needed and existing files are overwritten.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args uploadArgs) (*mcp.CallToolResult, any, error) {
 		result, err := mgr.Upload(args.SessionID, args.LocalPath, args.RemotePath)
 		if err != nil {
@@ -351,8 +355,12 @@ func registerTools(server *mcp.Server, mgr *SSHManager) {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolDownload,
-		Description: "Download a remote file or directory from a remote host via SFTP (recursive for directories)",
+		Name: toolDownload,
+		Description: "Download a remote file or directory from a remote host via SFTP (recursive for directories). " +
+			"If remote_path is a single file and local_path is an existing directory or ends with a path " +
+			"separator, the file is copied into that directory under its own name; otherwise local_path is " +
+			"the target file name. A leading '~/' in either path is expanded to the respective home directory. " +
+			"Parent directories are created as needed and existing files are overwritten.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args downloadArgs) (*mcp.CallToolResult, any, error) {
 		result, err := mgr.Download(args.SessionID, args.RemotePath, args.LocalPath)
 		if err != nil {
